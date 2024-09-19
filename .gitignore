@@ -1,0 +1,10 @@
+*.swp
+*~
+*.*~
+*.kra
+*.zip
+
+releases
+zig-out
+zig-cache
+assets
