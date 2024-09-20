@@ -1,0 +1,22 @@
+19 Sep 2024:
+Day 1 of jam. Theme is "Evolving Abilities". I'm thinking of doing something
+related to an incremental game. Ideally the mechanics itself is all about
+evolving abilities. The idea is that your child has been kidnapped by a
+dragon, so you are going to mine down the mountain to rescue them. It starts
+off with you clicking on the mountain to mine it, and then clicking on the
+mined material, to move it to base. And in base, it gets ecaluated some value.
+Then you can get dwarves who will mine for you, and some other creatures who
+will carry the material for you. then you unlock bigger miners, andtrains to
+move the material quickly and things along those lines. I feel it hits the
+evolving well enough, but maybe could be better. Overall I like the idea of
+the incremental style game 
+
+---
+
+20 Sep 2024:
+I'm still not fully sure exactly how the presentation is going to be, but for
+now, lets just stick with the bring down the mountain kinda thing. Or maybe we
+can do a bring down the dam kinda thing? Either way, lets start off and get
+the basics in place and see how it goes. Lets start off with a color pallete.
+
+NEXT: Implement Carriers
