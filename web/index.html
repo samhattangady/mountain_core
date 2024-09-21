@@ -20,7 +20,7 @@
 
   <script>
     const env = { ...api };
-    const fpsInterval = 16;
+    const fpsInterval = 1000/60;
     document.addEventListener('contextmenu', event => event.preventDefault());
     var then = window.performance.now();
 

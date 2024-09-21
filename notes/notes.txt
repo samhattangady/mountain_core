@@ -20,3 +20,74 @@ can do a bring down the dam kinda thing? Either way, lets start off and get
 the basics in place and see how it goes. Lets start off with a color pallete.
 
 NEXT: Implement Carriers
+
+Okay if you say so.
+
+I think I need to think about how the resources will be consumed. So we should
+have builder, like miner it will consume I guess. Sure.
+
+Moving into the 3rd (!) session ofthe day. But I don't know what to work on
+next. I think it's reached a point where we now have to do the design things.
+So let's atleast set that up? So we need to set up costs and limitations on
+some of these things. So basically when to disable things.
+
+How to store and determine costs? That's a good question. From a design
+perspective I think I like one of the kinds of answers that I have, but from a
+tech perspective, I don't think I know the answer. Umm it could be something
+we work out from a spreadsheet I guess?
+
+So there is rate of creation, rate of movement, and rate of consumption.
+Then depending on which rate is faster, there is also the storage set of
+things.
+
+But now, when it comes to creation, there are multiple ways to speed it up. We
+could either add a new miner, or speed up mining. Similarly, add a new
+carrier, or speed up all carriers. Things like that. So that's also something
+that we need to see.
+
+So what's the thing to put on the spreadsheet? Is it the ideal curves? And
+then based on things when to do that? Maybe something like that.
+
+So right now, we are thinking og things in terms of cost. COuld also be in
+terms of talents? In the sense that the same money can be used for differnt
+things. But then we can just have the same cost, and that should be okay
+right?
+
+Or maybe we can do the rate of carrying things? ANd strength? ANd also idle
+times
+
+I'm thinking if we want to do the carry multiple. Because it's the equivalent
+of adding aonther carrier. But maybe that is the point kinda? That we have the
+three ways to increase rate of movement, and they all multiply.
+
+So in terms of cost, what's the deal? What are we trying to do? If there are
+three ways that we can increase output, then ideally, the one that increases
+the speed the least should be the cheapest.
+
+So on the reverse side, when something is least effective, it should be most
+expensive
+
+So I think that having round numbers like we do now is a bit of an issue?
+Because it seems like no matter what we do, the rates are not ideal. So
+basically, here the game should be about balancing the three different types
+of rates. production, movement, and consumption. So you first want to upgrade
+the movements. lets put actual numbers that we have and see how it grows.
+
+---
+
+21 Sep 2024:
+Okay boo, we got this lets go. So I think we have "solutions" to the problems
+as stated yesterday. Basically, we have a thing that speeds up production by
+creating a "new" resource, that slows everything down again. That was the
+concern from yesterday I think. So I think that the goal for today needs to be
+to have the whole game playable. That includes having a rough set of target
+numbers for all of the different unlocks and achievements and things like
+that. Also a scaffolding for all the text and dialogue. So lets start off with
+doing the upgrade?
+
+Okay that works. Create buttons for speed up of other things.
+Okay that's done. Now we need to work on the unlock systems.
+
+NEXT: Show points. Create unlock system, linked to overall monumnet score.
+
+Okay. Lets do the unlock system.
