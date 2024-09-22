@@ -91,3 +91,8 @@ Okay that's done. Now we need to work on the unlock systems.
 NEXT: Show points. Create unlock system, linked to overall monumnet score.
 
 Okay. Lets do the unlock system.
+
+---
+
+22 Sep 2024:
+Submission is today. Lets see what we can get upto.

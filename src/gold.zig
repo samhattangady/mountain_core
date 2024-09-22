@@ -71,6 +71,139 @@ const BUILDER_TIMER = 90;
 const MINER_TIMER = 90;
 
 const UPGRADE_COSTS = @import("upgrade_costs.zig").UPGRADE_COSTS;
+const TechUpgrade = struct {
+    score: usize,
+    unlock: ButtonAction,
+    text: []const u8,
+    subtext: []const u8,
+    msg_index: u8,
+};
+const TECH_UPGRADES = [_]TechUpgrade{
+    .{
+        .score = 500,
+        .unlock = .carrier_speedup,
+        .text = "Consult the Golem Union",
+        .subtext = "Golems are known for their ability to transport items",
+        .msg_index = 3,
+    },
+    .{
+        .score = 1000,
+        .unlock = .builder_speedup,
+        .text = "Consult the Masons Organization",
+        .subtext = "The Masons have technology to increase the speed of building.",
+        .msg_index = 4,
+    },
+    .{
+        .score = 2000,
+        .unlock = .carrier_strength,
+        .text = "Consult the Blacksmith",
+        .subtext = "The Blacksmith can allow us to carry more material at a time.",
+        .msg_index = 5,
+    },
+    .{
+        .score = 3000,
+        .unlock = .resource_upgrade,
+        .text = "Consult the Alchemist Guild",
+        .subtext = "The Alchemists will have techniques for our material to be more valuable",
+        .msg_index = 6,
+    },
+    .{
+        .score = 7500,
+        .unlock = .miner_speedup,
+        .text = "Consult the Dwarven Court",
+        .subtext = "The Dwarves will know how to dig faster.",
+        .msg_index = 7,
+    },
+    .{
+        .score = 40000,
+        .unlock = .anim_speedup,
+        .text = "Consult the Fairy Queendom",
+        .subtext = "The Fairies will know how to transport material faster.",
+        .msg_index = 8,
+    },
+    .{
+        .score = 75000,
+        .unlock = .rep_mult_increase,
+        .text = "Consult the Elvish High Council",
+        .subtext = "The Elves will allow our monument to gain reputation faster.",
+        .msg_index = 9,
+    },
+    .{
+        .score = 10000000,
+        .unlock = .complete_game,
+        .text = "Prepare for Opening",
+        .subtext = "The Monument is almost complete",
+        .msg_index = 10,
+    },
+};
+
+const MESSAGES = [12][]const []const u8{
+    &.{
+        "We are driven by a compulsion to build",
+        "And so we build",
+        "Recruit Diggers to dig for building material",
+    },
+    &.{
+        "Recruit Carriers to carry material to the building site",
+    },
+    &.{
+        "Recruit Builders to build our monument",
+    },
+    &.{
+        "The Golems feel compelled by our cause",
+        "They grant us the technology to speed up our carriers",
+        "And so we build.",
+    },
+    &.{
+        "The Masons feel compelled by our cause",
+        "They grant us the technology to speed up our carriers",
+        "And so we build.",
+    },
+    &.{
+        "The Blacksmith feel compelled by our cause",
+        "They grant us the technology to speed up our carriers",
+        "And so we build.",
+    },
+    &.{
+        "The Alchemists feel compelled by our cause",
+        "They grant us the technology to speed up our carriers",
+        "And so we build.",
+    },
+    &.{
+        "The Dwarves feel compelled by our cause",
+        "They grant us the technology to speed up our carriers",
+        "And so we build.",
+    },
+    &.{
+        "The Fairies feel compelled by our cause",
+        "They grant us the technology to speed up our carriers",
+        "And so we build.",
+    },
+    &.{
+        "The Elves feel compelled by our cause",
+        "They grant us the technology to speed up our carriers",
+        "And so we build.",
+    },
+    &.{
+        "The Monument is ready to be completed.",
+        "There is just one final step that remains.",
+        "And so we build.",
+    },
+    &.{
+        "We have completed building this monument.",
+        "We did not build this monument for any religion",
+        "Not for any country or any person.",
+        "We built this monument for the joy of building.",
+        "Building gives us purpose and meaning.",
+        "Aspiring to build great things brings us all together",
+        "All the land has felt compelled by our cause.",
+        "We create meaning and purpose through the act of building",
+        "And there is nothing more sacred and noble",
+        "And so we build.",
+        "Thank you for playing.",
+        "I look forward to see what you will build",
+    },
+};
 
 // World has origin at the center, x-right, y-up.
 // Screen has origin at bottomleft, x-right, y-up
@@ -236,6 +369,7 @@ const ButtonAction = enum {
     resource_upgrade,
     anim_speedup,
     rep_mult_increase,
+    complete_game,
     //mine_storage_add_row,
     //base_storage_add_row,
 };
@@ -261,6 +395,7 @@ pub const Game = struct {
     // TODO (20 Sep 2024 sam): make this some kind of ring buffer
     animations: std.ArrayList(Animation),
     buttons: std.ArrayList(UpgradeButton),
+    tech_buttons: std.ArrayList(UpgradeButton),
     mountain: Mountain = .{},
     mine_storage: Storage = .{},
     base_storage: Storage = .{},
@@ -273,7 +408,14 @@ pub const Game = struct {
     miner_ore: ResType = .stone,
     score: u64 = 10,
     points: u64 = 10,
+    score_display: u64 = 0,
+    points_display: u64 = 0,
     levels: [NUM_ACTIONS]u8 = [_]u8{0} ** NUM_ACTIONS,
+    unlocked: [NUM_ACTIONS]bool = [_]bool{false} ** NUM_ACTIONS,
+    tech_index: u8 = 0,
+    show_message: bool = true,
+    message_index: u8 = 0,
+    message_subindex: u8 = 0,
 
     xosh: std.Random.Xoshiro256,
     rng: std.Random = undefined,
@@ -312,6 +454,7 @@ pub const Game = struct {
             .builders = std.ArrayList(Builder).initCapacity(allocator, BUILDER_PER_LANE * LANES_MAX_COUNT) catch unreachable,
             .animations = std.ArrayList(Animation).initCapacity(allocator, ANIM_MAX_COUNT) catch unreachable,
             .buttons = std.ArrayList(UpgradeButton).initCapacity(allocator, 32) catch unreachable,
+            .tech_buttons = std.ArrayList(UpgradeButton).initCapacity(allocator, 8) catch unreachable,
             .allocator = allocator,
             .arena_handle = arena_handle,
             .arena = arena_handle.allocator(),
@@ -335,28 +478,36 @@ pub const Game = struct {
     }
 
     pub fn setup(self: *Game) void {
-        self.buttons.appendAssumeCapacity(.{
-            .button = .{
-                .rect = .{
-                    .position = .{ .x = 30, .y = 30 },
-                    .size = .{ .x = 150, .y = 26 },
+        self.unlocked[@intFromEnum(ButtonAction.miner_recruit)] = true;
+        self.resetButtons();
+    }
+
+    pub fn resetButtons(self: *Game) void {
+        self.buttons.clearRetainingCapacity();
+        if (self.unlocked[@intFromEnum(ButtonAction.miner_recruit)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 30, .y = 30 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.miner_recruit),
+                    .text = "Recruit Miner",
                 },
-                .value = @intFromEnum(ButtonAction.miner_recruit),
-                .text = "Recruit Miner",
-            },
-            .cost = 0,
-        });
-        self.buttons.appendAssumeCapacity(.{
-            .button = .{
-                .rect = .{
-                    .position = .{ .x = 200, .y = 30 },
-                    .size = .{ .x = 150, .y = 26 },
+                .cost = 0,
+            });
+        if (self.unlocked[@intFromEnum(ButtonAction.miner_speedup)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 200, .y = 30 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.miner_speedup),
+                    .text = "Miner Speedup",
                 },
-                .value = @intFromEnum(ButtonAction.miner_speedup),
-                .text = "Miner Speedup",
-            },
-            .cost = 0,
-        });
+                .cost = 0,
+            });
         // self.buttons.appendAssumeCapacity(.{
         //     .rect = .{
         //         .position = .{ .x = 350, .y = 30 },
@@ -365,102 +516,114 @@ pub const Game = struct {
         //     .value = @intFromEnum(ButtonAction.mine_storage_add_row),
         //     .text = "Storage Add Row",
         // });
-        self.buttons.appendAssumeCapacity(.{
-            .button = .{
-                .rect = .{
-                    .position = .{ .x = 30, .y = 90 },
-                    .size = .{ .x = 150, .y = 26 },
+        if (self.unlocked[@intFromEnum(ButtonAction.carrier_recruit)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 30, .y = 90 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.carrier_recruit),
+                    .text = "Recruit Carrier",
                 },
-                .value = @intFromEnum(ButtonAction.carrier_recruit),
-                .text = "Recruit Carrier",
-            },
-            .cost = 0,
-        });
-        self.buttons.appendAssumeCapacity(.{
-            .button = .{
-                .rect = .{
-                    .position = .{ .x = 200, .y = 90 },
-                    .size = .{ .x = 150, .y = 26 },
+                .cost = 0,
+            });
+        if (self.unlocked[@intFromEnum(ButtonAction.carrier_speedup)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 200, .y = 90 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.carrier_speedup),
+                    .text = "Carrier Speedup",
                 },
-                .value = @intFromEnum(ButtonAction.carrier_speedup),
-                .text = "Carrier Speedup",
-            },
-            .cost = 0,
-        });
-        self.buttons.appendAssumeCapacity(.{
-            .button = .{
-                .rect = .{
-                    .position = .{ .x = 400, .y = 90 },
-                    .size = .{ .x = 150, .y = 26 },
+                .cost = 0,
+            });
+        if (self.unlocked[@intFromEnum(ButtonAction.carrier_strength)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 400, .y = 90 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.carrier_strength),
+                    .text = "Carrier Strength",
                 },
-                .value = @intFromEnum(ButtonAction.carrier_strength),
-                .text = "Carrier Strength",
-            },
-            .cost = 0,
-        });
-        self.buttons.appendAssumeCapacity(.{
-            .button = .{
-                .rect = .{
-                    .position = .{ .x = 30, .y = 150 },
-                    .size = .{ .x = 150, .y = 26 },
+                .cost = 0,
+            });
+        if (self.unlocked[@intFromEnum(ButtonAction.builder_recruit)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 30, .y = 150 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.builder_recruit),
+                    .text = "Recruit Builder",
                 },
-                .value = @intFromEnum(ButtonAction.builder_recruit),
-                .text = "Recruit Builder",
-            },
-            .cost = 0,
-        });
-        self.buttons.appendAssumeCapacity(.{
-            .button = .{
-                .rect = .{
-                    .position = .{ .x = 200, .y = 150 },
-                    .size = .{ .x = 150, .y = 26 },
+                .cost = 0,
+            });
+        if (self.unlocked[@intFromEnum(ButtonAction.builder_speedup)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 200, .y = 150 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.builder_speedup),
+                    .text = "Builder Speedup",
                 },
-                .value = @intFromEnum(ButtonAction.builder_speedup),
-                .text = "Builder Speedup",
-            },
-            .cost = 0,
-        });
-        //self.buttons.appendAssumeCapacity(.{
-        //    .rect = .{
-        //        .position = .{ .x = 350, .y = 90 },
-        //        .size = .{ .x = 150, .y = 26 },
-        //    },
-        //    .value = @intFromEnum(ButtonAction.base_storage_add_row),
-        //    .text = "Storage Builder",
-        //});
-        self.buttons.appendAssumeCapacity(.{
-            .button = .{
-                .rect = .{
-                    .position = .{ .x = 200, .y = 190 },
-                    .size = .{ .x = 150, .y = 26 },
+                .cost = 0,
+            });
+        if (self.unlocked[@intFromEnum(ButtonAction.resource_upgrade)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 200, .y = 190 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.resource_upgrade),
+                    .text = "Upgrade Resource",
                 },
-                .value = @intFromEnum(ButtonAction.resource_upgrade),
-                .text = "Upgrade Resource",
-            },
-            .cost = 0,
-        });
-        self.buttons.appendAssumeCapacity(.{
-            .button = .{
-                .rect = .{
-                    .position = .{ .x = 400, .y = 190 },
-                    .size = .{ .x = 150, .y = 26 },
+                .cost = 0,
+            });
+        if (self.unlocked[@intFromEnum(ButtonAction.anim_speedup)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 400, .y = 190 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.anim_speedup),
+                    .text = "Transfer Speedup",
                 },
-                .value = @intFromEnum(ButtonAction.anim_speedup),
-                .text = "Transfer Speedup",
-            },
-            .cost = 0,
-        });
-        self.buttons.appendAssumeCapacity(.{
-            .button = .{
-                .rect = .{
-                    .position = .{ .x = 200, .y = 260 },
-                    .size = .{ .x = 150, .y = 26 },
+                .cost = 0,
+            });
+        if (self.unlocked[@intFromEnum(ButtonAction.rep_mult_increase)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 200, .y = 260 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.rep_mult_increase),
+                    .text = "Builder Rep Multiplier",
                 },
-                .value = @intFromEnum(ButtonAction.rep_mult_increase),
-                .text = "Builder Rep Multiplier",
-            },
-            .cost = 0,
-        });
+                .cost = 0,
+            });
+        if (self.unlocked[@intFromEnum(ButtonAction.complete_game)])
+            self.buttons.appendAssumeCapacity(.{
+                .button = .{
+                    .rect = .{
+                        .position = .{ .x = 200, .y = 350 },
+                        .size = .{ .x = 150, .y = 26 },
+                    },
+                    .value = @intFromEnum(ButtonAction.complete_game),
+                    .text = "Complete Game",
+                },
+                .cost = 0,
+            });
         for (0..NUM_ACTIONS) |i| self.setButtonCost(@enumFromInt(i));
     }
 
@@ -534,9 +697,23 @@ pub const Game = struct {
         switch (action) {
             .miner_recruit => {
                 self.miners.appendAssumeCapacity(.{ .timer = self.miner_timer });
+                if (!self.unlocked[@intFromEnum(ButtonAction.carrier_recruit)]) {
+                    self.message_index = 1;
+                    self.message_subindex = 0;
+                    self.show_message = true;
+                    self.unlocked[@intFromEnum(ButtonAction.carrier_recruit)] = true;
+                    self.resetButtons();
+                }
             },
             .carrier_recruit => {
                 self.carriers.appendAssumeCapacity(.{ .timer = 0, .state = .waiting });
+                if (!self.unlocked[@intFromEnum(ButtonAction.builder_recruit)]) {
+                    self.message_index = 2;
+                    self.message_subindex = 0;
+                    self.show_message = true;
+                    self.unlocked[@intFromEnum(ButtonAction.builder_recruit)] = true;
+                    self.resetButtons();
+                }
             },
             .builder_recruit => {
                 self.builders.appendAssumeCapacity(.{ .timer = 0 });
@@ -558,6 +735,11 @@ pub const Game = struct {
             },
             .anim_speedup => self.anim_steps -= @divFloor(self.anim_steps, 5),
             .rep_mult_increase => self.rep_mult *= self.rep_mult + 1,
+            .complete_game => {
+                self.show_message = true;
+                self.message_subindex = 0;
+                self.message_index = MESSAGES.len - 1;
+            },
             // .mine_storage_add_row => self.mine_storage.num_rows += 1,
             // .base_storage_add_row => self.base_storage.num_rows += 1,
             .resource_upgrade => {
@@ -645,6 +827,43 @@ pub const Game = struct {
         }
     }
 
+    fn checkTechUpgrades(self: *Game) void {
+        self.tech_buttons.clearRetainingCapacity();
+        var pos = Vec2{ .x = 120, .y = SCREEN_SIZE.y - 200 };
+        for (TECH_UPGRADES) |tu| {
+            if (self.unlocked[@intFromEnum(tu.unlock)]) continue;
+            if (self.score >= (tu.score - @divFloor(tu.score, 5))) {
+                self.tech_buttons.appendAssumeCapacity(.{
+                    .button = .{
+                        .rect = .{
+                            .position = pos,
+                            .size = .{ .x = 400, .y = 40 },
+                        },
+                        .text = tu.text,
+                        .text2 = tu.subtext,
+                        .value = @intFromEnum(tu.unlock),
+                        .index = tu.msg_index,
+                    },
+                    .cost = tu.score,
+                });
+                pos = pos.add(.{ .y = -50 });
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn updateScore(self: *Game) void {
+        if (self.score_display < self.score) {
+            const change = @divFloor(self.score - self.score_display, 10) + 1;
+            self.score_display += change;
+        }
+        if (self.points_display < self.points) {
+            const change = @divFloor(self.points - self.points_display, 10) + 1;
+            self.points_display += change;
+        }
+    }
+
     // updateGame
     pub fn update(self: *Game, ticks: u64) void {
         // clear the arena and reset.
@@ -652,15 +871,38 @@ pub const Game = struct {
         _ = self.arena_handle.reset(.retain_capacity);
         self.arena = self.arena_handle.allocator();
         self.ticks = @intCast(ticks);
+        self.updateScore();
         if (self.haathi.inputs.getKey(.control).is_down and self.haathi.inputs.getKey(.s).is_clicked) {
             self.saveGame();
+        }
+        if (self.show_message and self.haathi.inputs.mouse.l_button.is_clicked) {
+            const len = MESSAGES[self.message_index].len;
+            self.message_subindex += 1;
+            if (self.message_subindex > len) {
+                self.show_message = false;
+                self.message_subindex = 0;
+            }
         }
         for (self.buttons.items) |*button| button.button.update(self.haathi.inputs.mouse);
         for (self.buttons.items) |button| {
             if (button.button.clicked) {
-                if (self.points >= button.cost) {
+                if (self.points_display >= button.cost) {
+                    self.points_display -= button.cost;
                     self.points -= button.cost;
                     self.doButtonAction(@enumFromInt(button.button.value));
+                }
+            }
+        }
+        for (self.tech_buttons.items) |*button| button.button.update(self.haathi.inputs.mouse);
+        for (self.tech_buttons.items) |button| {
+            if (button.button.clicked) {
+                if (self.score >= button.cost) {
+                    self.unlocked[button.button.value] = true;
+                    self.message_index = @intCast(button.button.index);
+                    self.message_subindex = 0;
+                    self.show_message = true;
+                    self.checkTechUpgrades();
+                    self.resetButtons();
                 }
             }
         }
@@ -789,6 +1031,7 @@ pub const Game = struct {
                                 .storage_index = @intCast(i),
                             } },
                         });
+                        self.checkTechUpgrades();
                         break;
                     }
                 }
@@ -826,18 +1069,44 @@ pub const Game = struct {
             .color = colors.apollo_light_4,
         });
         self.haathi.drawRect(.{
+            .position = .{ .x = 0, .y = SCREEN_SIZE.y * 0.8 },
+            .size = .{ .x = SCREEN_SIZE.x, .y = SCREEN_SIZE.y * 0.2 },
+            .color = colors.apollo_blue_3,
+        });
+        self.haathi.drawRect(.{
             .position = self.haathi.inputs.mouse.current_pos,
             .size = .{ .x = 10, .y = 10 },
             .color = colors.apollo_red_6,
         });
-        const score_text = std.fmt.allocPrintZ(self.arena, "{d}: {d} points", .{ self.score, self.points }) catch unreachable;
-        self.haathi.drawText(.{
-            .text = score_text,
-            .position = .{ .x = 300, .y = 300 },
-            .color = colors.apollo_dark_1,
-        });
+        {
+            const points_text = std.fmt.allocPrintZ(self.arena, "{d} points", .{self.points_display}) catch unreachable;
+            self.haathi.drawText(.{
+                .text = points_text,
+                .position = .{ .x = 300, .y = 300 },
+                .color = colors.apollo_dark_1,
+            });
+        }
+        {
+            const score_text = std.fmt.allocPrintZ(self.arena, "{d}", .{self.score_display}) catch unreachable;
+            self.haathi.drawText(.{
+                .text = score_text,
+                .position = .{ .x = SCREEN_SIZE.x * 0.75, .y = SCREEN_SIZE.y * 0.86 },
+                .color = colors.apollo_light_4,
+                .style = FONTS[2],
+            });
+        }
         for (self.buttons.items) |button| {
-            const progress: f32 = @min(1.0, @as(f32, @floatFromInt(self.points)) / @as(f32, @floatFromInt(button.cost)));
+            const progress: f32 = @min(1.0, @as(f32, @floatFromInt(self.points_display)) / @as(f32, @floatFromInt(button.cost)));
+            const color = if (button.button.hovered and progress == 1.0) colors.apollo_blue_4.lerp(colors.apollo_blue_6, 0.4) else colors.apollo_blue_4;
+            self.haathi.drawRect(.{ .position = button.button.rect.position, .size = button.button.rect.size, .color = colors.apollo_dark_4, .radius = 4 });
+            self.haathi.drawRect(.{ .position = button.button.rect.position, .size = button.button.rect.size.scaleVec2(.{ .x = progress, .y = 1 }), .color = color, .radius = 4 });
+            const text_center = button.button.rect.position.add(button.button.rect.size.scaleVec2(.{ .x = 0.5, .y = 1 }).add(.{ .y = -18 }));
+            self.haathi.drawText(.{ .text = button.button.text, .position = text_center, .color = colors.apollo_light_4 });
+            const cost_text = std.fmt.allocPrintZ(self.arena, "[{d}]", .{button.cost}) catch unreachable;
+            self.haathi.drawText(.{ .text = cost_text, .position = text_center.add(.{ .y = -20 }), .color = colors.apollo_blue_1, .style = FONTS[1] });
+        }
+        for (self.tech_buttons.items) |button| {
+            const progress: f32 = @min(1.0, @as(f32, @floatFromInt(self.score_display)) / @as(f32, @floatFromInt(button.cost)));
             const color = if (button.button.hovered and progress == 1.0) colors.apollo_blue_4.lerp(colors.apollo_blue_6, 0.4) else colors.apollo_blue_4;
             self.haathi.drawRect(.{ .position = button.button.rect.position, .size = button.button.rect.size, .color = colors.apollo_dark_4, .radius = 4 });
             self.haathi.drawRect(.{ .position = button.button.rect.position, .size = button.button.rect.size.scaleVec2(.{ .x = progress, .y = 1 }), .color = color, .radius = 4 });
@@ -978,6 +1247,18 @@ pub const Game = struct {
                 .size = .{ .x = 12, .y = 40 * progress },
                 .color = colors.apollo_green_1,
                 .radius = 2,
+            });
+        }
+        if (self.show_message) {
+            self.haathi.drawRect(.{
+                .position = SCREEN_SIZE.scale(0.3),
+                .size = SCREEN_SIZE.scale(0.4),
+                .color = colors.apollo_dark_1,
+            });
+            self.haathi.drawText(.{
+                .position = SCREEN_SIZE.scale(0.5),
+                .text = MESSAGES[self.message_index][self.message_subindex],
+                .color = colors.apollo_light_3,
             });
         }
     }

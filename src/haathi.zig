@@ -12,9 +12,9 @@ pub const SCREEN_HEIGHT = 720;
 pub const SCREEN_WIDTH = 1280;
 pub const SCREEN_SIZE = Vec2{ .x = SCREEN_WIDTH, .y = SCREEN_HEIGHT };
 pub const FONTS = [_][]const u8{
-    "18px JetBrainsMono",
-    "12px JetBrainsMono",
-    "80px MedevialSharp",
+    "18px InterMedium",
+    "12px InterThin",
+    "80px InterBlack",
 };
 
 pub const CursorStyle = enum {
