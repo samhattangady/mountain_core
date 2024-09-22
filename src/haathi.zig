@@ -12,8 +12,8 @@ pub const SCREEN_HEIGHT = 720;
 pub const SCREEN_WIDTH = 1280;
 pub const SCREEN_SIZE = Vec2{ .x = SCREEN_WIDTH, .y = SCREEN_HEIGHT };
 pub const FONTS = [_][]const u8{
-    "18px InterMedium",
-    "12px InterThin",
+    "20px InterBlack",
+    "12px InterMedium",
     "80px InterBlack",
 };
 

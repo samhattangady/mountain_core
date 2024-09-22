@@ -26,16 +26,18 @@ const WORLD_SIZE = SCREEN_SIZE;
 const WORLD_OFFSET = Vec2{};
 
 const ALL_SPRITES = [_][]const u8{
-    "img/structures.png",
-    "img/ore0.png",
-    "img/ore1.png",
-    "img/djinn_walking.png",
-    "img/djinn_carrying.png",
+    "img/bg.png",
+    "img/bdg1.png",
+    "img/bdg2.png",
+    "img/bdg3.png",
+    "img/bdg4.png",
+    "img/bdg5.png",
+    "img/digger.png",
+    "img/material.png",
+    "img/carrier.png",
+    "img/builder.png",
 };
 
-const PICKUP_SPRITE = haathi_lib.Sprite{ .path = "img/structures.png", .anchor = .{ .x = 0 * 28 }, .size = .{ .x = 28, .y = 28 } };
-const DROPOFF_SPRITE = haathi_lib.Sprite{ .path = "img/structures.png", .anchor = .{ .x = 1 * 28 }, .size = .{ .x = 28, .y = 28 } };
-const ACTION_SPRITE = haathi_lib.Sprite{ .path = "img/structures.png", .anchor = .{ .x = 2 * 28 }, .size = .{ .x = 28, .y = 28 } };
 // TODO (23 Jul 2024 sam): lol
 const NUMBER_STR = [_][]const u8{ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49" };
 
@@ -48,18 +50,21 @@ const ANIM_MAX_COUNT = 256;
 const CARRIERS_PER_LANE = 3;
 const BUILDER_PER_LANE = 2;
 
-const LANE0_POSITION = SCREEN_SIZE.scaleVec2(.{ .x = 0.5, .y = 0.1 }).add(LANE_OFFSET);
-const BUILDER0_POSITION = SCREEN_SIZE.scaleVec2(.{ .x = 0.5, .y = 0.7 }).add(LANE_OFFSET);
+const MINER_0_POSITION = Vec2{ .x = 801, .y = 89 };
+const MINER_LAST_POSITION = Vec2{ .x = 1167, .y = 89 };
+const BUILDER0_POSITION = Vec2{ .x = 809, .y = 418 };
+const BUILDER_LAST_POSITION = Vec2{ .x = 1154, .y = 418 };
+const MINER_OFFSET = Vec2{ .x = (MINER_LAST_POSITION.x - MINER_0_POSITION.x) / 9 };
+const BUILDER_OFFSET = Vec2{ .x = (BUILDER_LAST_POSITION.x - BUILDER0_POSITION.x) / 9 };
 const LANE_OFFSET = Vec2{ .x = (SCREEN_SIZE.x * 0.45) / (LANES_MAX_COUNT + 1) };
-const SAME_LANE_OFFSET = LANE_OFFSET.scale(0.1).add(.{ .y = -4 });
-const STORAGE_SLOT = Vec2{ .x = SCREEN_SIZE.x * 0.7, .y = SCREEN_SIZE.y * 0.2 };
-const BASE_STORAGE_SLOT = Vec2{ .x = SCREEN_SIZE.x * 0.7, .y = SCREEN_SIZE.y * 0.6 };
+const STORAGE_SLOT = Vec2{ .x = 847, .y = 195 };
+const BASE_STORAGE_SLOT = Vec2{ .x = 805, .y = 331 };
 const STORAGE_ROW = Vec2{ .y = 30 };
-const STORAGE_LANE = Vec2{ .x = 25 };
-const CARRIER_SLOT = Vec2{ .x = SCREEN_SIZE.x * 0.6, .y = SCREEN_SIZE.y * 0.3 };
+const STORAGE_LANE = Vec2{ .x = 29 };
+const CARRIER_SLOT = Vec2{ .x = 768, .y = 212 };
 const CARRIER_LANE = Vec2{ .x = SCREEN_SIZE.x * 0.4 / (LANES_MAX_COUNT + 1) };
 const CARRIER_OFFSET = Vec2{ .x = 20 };
-const CARRIER_DROPOFF_SLOT = Vec2{ .x = SCREEN_SIZE.x * 0.7, .y = SCREEN_SIZE.y * 0.5 };
+const CARRIER_DROPOFF_SLOT = Vec2{ .x = 844, .y = 319 };
 const CARRIER_DROPOFF_LANE = Vec2{ .x = SCREEN_SIZE.x * 0.2 / (LANES_MAX_COUNT + 1) };
 const CARRIER_DROPOFF_OFFSET = Vec2{ .x = 20 };
 
@@ -139,6 +144,7 @@ const TECH_UPGRADES = [_]TechUpgrade{
 
 const MESSAGES = [12][]const []const u8{
     &.{
+        "Click to Start",
         "We are driven by a compulsion to build",
         "And so we build",
         "Recruit Diggers to dig for building material",
@@ -416,6 +422,8 @@ pub const Game = struct {
     show_message: bool = true,
     message_index: u8 = 0,
     message_subindex: u8 = 0,
+    palace_completion: u8 = 0,
+    building_complete: bool = false,
 
     xosh: std.Random.Xoshiro256,
     rng: std.Random = undefined,
@@ -479,6 +487,9 @@ pub const Game = struct {
 
     pub fn setup(self: *Game) void {
         self.unlocked[@intFromEnum(ButtonAction.miner_recruit)] = true;
+        if (true) {
+            for (&self.unlocked) |*unl| unl.* = true;
+        }
         self.resetButtons();
     }
 
@@ -488,8 +499,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 30, .y = 30 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 50, .y = 60 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.miner_recruit),
                     .text = "Recruit Miner",
@@ -500,8 +511,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 200, .y = 30 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 330, .y = 60 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.miner_speedup),
                     .text = "Miner Speedup",
@@ -520,8 +531,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 30, .y = 90 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 50, .y = 140 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.carrier_recruit),
                     .text = "Recruit Carrier",
@@ -532,8 +543,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 200, .y = 90 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 330, .y = 140 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.carrier_speedup),
                     .text = "Carrier Speedup",
@@ -544,8 +555,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 400, .y = 90 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 50, .y = 220 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.carrier_strength),
                     .text = "Carrier Strength",
@@ -556,8 +567,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 30, .y = 150 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 50, .y = 300 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.builder_recruit),
                     .text = "Recruit Builder",
@@ -568,8 +579,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 200, .y = 150 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 330, .y = 300 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.builder_speedup),
                     .text = "Builder Speedup",
@@ -580,8 +591,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 200, .y = 190 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 50, .y = 380 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.resource_upgrade),
                     .text = "Upgrade Resource",
@@ -592,8 +603,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 400, .y = 190 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 330, .y = 380 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.anim_speedup),
                     .text = "Transfer Speedup",
@@ -604,8 +615,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 200, .y = 260 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 50, .y = 460 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.rep_mult_increase),
                     .text = "Builder Rep Multiplier",
@@ -616,8 +627,8 @@ pub const Game = struct {
             self.buttons.appendAssumeCapacity(.{
                 .button = .{
                     .rect = .{
-                        .position = .{ .x = 200, .y = 350 },
-                        .size = .{ .x = 150, .y = 26 },
+                        .position = .{ .x = 330, .y = 460 },
+                        .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.complete_game),
                     .text = "Complete Game",
@@ -739,6 +750,7 @@ pub const Game = struct {
                 self.show_message = true;
                 self.message_subindex = 0;
                 self.message_index = MESSAGES.len - 1;
+                self.building_complete = true;
             },
             // .mine_storage_add_row => self.mine_storage.num_rows += 1,
             // .base_storage_add_row => self.base_storage.num_rows += 1,
@@ -773,16 +785,14 @@ pub const Game = struct {
     fn getMinerPosition(self: *Game, index: usize) Vec2 {
         _ = self;
         const lane = @mod(index, LANES_MAX_COUNT);
-        const row = @divFloor(index, LANES_MAX_COUNT);
-        const position = LANE0_POSITION.add(LANE_OFFSET.scale(@floatFromInt(lane))).add(SAME_LANE_OFFSET.scale(@floatFromInt(row)));
+        const position = MINER_0_POSITION.add(MINER_OFFSET.scale(@floatFromInt(lane)));
         return position;
     }
 
     fn getMineStoragePosition(self: *Game, index: usize) Vec2 {
         _ = self;
         const str_lane = @mod(index, STORAGE_PER_ROW);
-        const str_row = @divFloor(index, STORAGE_PER_ROW);
-        const position = STORAGE_SLOT.add(STORAGE_LANE.scale(@floatFromInt(str_lane))).add(STORAGE_ROW.scale(@floatFromInt(str_row)));
+        const position = STORAGE_SLOT.add(STORAGE_LANE.scale(@floatFromInt(str_lane)));
         return position;
     }
 
@@ -797,8 +807,7 @@ pub const Game = struct {
     fn getBuilderPosition(self: *Game, index: usize) Vec2 {
         _ = self;
         const lane = @mod(index, LANES_MAX_COUNT);
-        const row = @divFloor(index, LANES_MAX_COUNT);
-        const position = BUILDER0_POSITION.add(LANE_OFFSET.scale(@floatFromInt(lane))).add(SAME_LANE_OFFSET.scale(@floatFromInt(row)));
+        const position = BUILDER0_POSITION.add(BUILDER_OFFSET.scale(@floatFromInt(lane)));
         return position;
     }
 
@@ -829,7 +838,7 @@ pub const Game = struct {
 
     fn checkTechUpgrades(self: *Game) void {
         self.tech_buttons.clearRetainingCapacity();
-        var pos = Vec2{ .x = 120, .y = SCREEN_SIZE.y - 200 };
+        var pos = Vec2{ .x = 50, .y = 540 };
         for (TECH_UPGRADES) |tu| {
             if (self.unlocked[@intFromEnum(tu.unlock)]) continue;
             if (self.score >= (tu.score - @divFloor(tu.score, 5))) {
@@ -847,10 +856,18 @@ pub const Game = struct {
                     .cost = tu.score,
                 });
                 pos = pos.add(.{ .y = -50 });
+                break;
             } else {
                 break;
             }
         }
+        const limits = [_]u64{ 0, 500, 50000, 500000 };
+        for (limits, 0..) |limit, i| {
+            if (self.score_display > limit) {
+                self.palace_completion = @intCast(i);
+            }
+        }
+        if (self.building_complete) self.palace_completion = 4;
     }
 
     fn updateScore(self: *Game) void {
@@ -874,6 +891,9 @@ pub const Game = struct {
         self.updateScore();
         if (self.haathi.inputs.getKey(.control).is_down and self.haathi.inputs.getKey(.s).is_clicked) {
             self.saveGame();
+        }
+        if (self.haathi.inputs.getKey(.control).is_clicked) {
+            helpers.debugPrint(".{{ .x={d}, .y={d} }}", .{ self.haathi.inputs.mouse.current_pos.x, self.haathi.inputs.mouse.current_pos.y });
         }
         if (self.show_message and self.haathi.inputs.mouse.l_button.is_clicked) {
             const len = MESSAGES[self.message_index].len;
@@ -1063,29 +1083,63 @@ pub const Game = struct {
 
     pub fn render(self: *Game) void {
         // background
-        self.haathi.drawRect(.{
+        self.haathi.drawSprite(.{
+            .sprite = .{
+                .path = "img/bg.png",
+                .anchor = .{},
+                .size = SCREEN_SIZE,
+            },
             .position = .{},
-            .size = SCREEN_SIZE,
-            .color = colors.apollo_light_4,
         });
-        self.haathi.drawRect(.{
-            .position = .{ .x = 0, .y = SCREEN_SIZE.y * 0.8 },
-            .size = .{ .x = SCREEN_SIZE.x, .y = SCREEN_SIZE.y * 0.2 },
-            .color = colors.apollo_blue_3,
+        self.haathi.drawSprite(.{
+            .sprite = .{
+                .path = "img/bdg1.png",
+                .anchor = .{},
+                .size = .{ .x = 440, .y = 258 },
+            },
+            .position = .{ .x = 769, .y = 389 },
         });
-        self.haathi.drawRect(.{
-            .position = self.haathi.inputs.mouse.current_pos,
-            .size = .{ .x = 10, .y = 10 },
-            .color = colors.apollo_red_6,
-        });
-        {
-            const points_text = std.fmt.allocPrintZ(self.arena, "{d} points", .{self.points_display}) catch unreachable;
-            self.haathi.drawText(.{
-                .text = points_text,
-                .position = .{ .x = 300, .y = 300 },
-                .color = colors.apollo_dark_1,
+        if (self.palace_completion > 0)
+            self.haathi.drawSprite(.{
+                .sprite = .{
+                    .path = "img/bdg2.png",
+                    .anchor = .{},
+                    .size = .{ .x = 440, .y = 258 },
+                },
+                .position = .{ .x = 769, .y = 389 },
             });
-        }
+        if (self.palace_completion > 1)
+            self.haathi.drawSprite(.{
+                .sprite = .{
+                    .path = "img/bdg3.png",
+                    .anchor = .{},
+                    .size = .{ .x = 440, .y = 258 },
+                },
+                .position = .{ .x = 769, .y = 389 },
+            });
+        if (self.palace_completion > 2)
+            self.haathi.drawSprite(.{
+                .sprite = .{
+                    .path = "img/bdg4.png",
+                    .anchor = .{},
+                    .size = .{ .x = 440, .y = 258 },
+                },
+                .position = .{ .x = 769, .y = 389 },
+            });
+        if (self.palace_completion > 3)
+            self.haathi.drawSprite(.{
+                .sprite = .{
+                    .path = "img/bdg5.png",
+                    .anchor = .{},
+                    .size = .{ .x = 440, .y = 258 },
+                },
+                .position = .{ .x = 769, .y = 389 },
+            });
+        // self.haathi.drawRect(.{
+        //     .position = .{ .x = 0, .y = SCREEN_SIZE.y * 0.8 },
+        //     .size = .{ .x = SCREEN_SIZE.x, .y = SCREEN_SIZE.y * 0.2 },
+        //     .color = colors.apollo_blue_3,
+        // });
         {
             const score_text = std.fmt.allocPrintZ(self.arena, "{d}", .{self.score_display}) catch unreachable;
             self.haathi.drawText(.{
@@ -1095,40 +1149,189 @@ pub const Game = struct {
                 .style = FONTS[2],
             });
         }
+        {
+            const BORDER = 10;
+            // shadow of pane
+            self.haathi.drawRect(.{
+                .position = .{ .x = 25, .y = 15 },
+                .size = .{ .y = SCREEN_SIZE.y - 100, .x = (SCREEN_SIZE.x * 0.5) - 30 },
+                .color = colors.apollo_green_3,
+                .radius = 15,
+            });
+            self.haathi.drawRect(.{
+                .position = .{ .x = 25, .y = 446 },
+                .size = .{ .y = 76, .x = (SCREEN_SIZE.x * 0.5) - 30 },
+                .color = colors.apollo_blue_4,
+            });
+            self.haathi.drawRect(.{
+                .position = .{ .x = 25, .y = 529 },
+                .size = .{ .y = 159, .x = (SCREEN_SIZE.x * 0.5) - 30 },
+                .color = colors.apollo_blue_2,
+                .radius = 10,
+            });
+            self.haathi.drawRect(.{
+                .position = .{ .x = 25, .y = 522 },
+                .size = .{ .y = 32, .x = (SCREEN_SIZE.x * 0.5) - 30 },
+                .color = colors.apollo_blue_3,
+            });
+            self.haathi.drawRect(.{
+                .position = .{ .x = 15, .y = 25 },
+                .size = .{ .y = SCREEN_SIZE.y - 40, .x = (SCREEN_SIZE.x * 0.5) - 30 },
+                .color = colors.apollo_brown_2,
+                .radius = 10,
+            });
+            self.haathi.drawRect(.{
+                .position = .{ .x = 15 + BORDER, .y = 25 + BORDER },
+                .size = .{ .y = SCREEN_SIZE.y - 40 - (2 * BORDER), .x = (SCREEN_SIZE.x * 0.5) - 30 - (2 * BORDER) },
+                .color = colors.apollo_brown_6,
+                .radius = 10,
+            });
+        }
+        {
+            const points_text = std.fmt.allocPrintZ(self.arena, "{d}", .{self.points_display}) catch unreachable;
+            self.haathi.drawText(.{
+                .text = points_text,
+                .position = .{ .x = 0.315 * SCREEN_SIZE.x, .y = SCREEN_SIZE.y * 0.88 },
+                .color = colors.apollo_brown_3,
+                .style = "60px InterBlack",
+            });
+            self.haathi.drawText(.{
+                .text = "Points:",
+                .position = .{ .x = 0.11 * SCREEN_SIZE.x, .y = SCREEN_SIZE.y * 0.89 },
+                .color = colors.apollo_brown_4,
+                .style = "40px InterBlack",
+            });
+        }
         for (self.buttons.items) |button| {
             const progress: f32 = @min(1.0, @as(f32, @floatFromInt(self.points_display)) / @as(f32, @floatFromInt(button.cost)));
-            const color = if (button.button.hovered and progress == 1.0) colors.apollo_blue_4.lerp(colors.apollo_blue_6, 0.4) else colors.apollo_blue_4;
-            self.haathi.drawRect(.{ .position = button.button.rect.position, .size = button.button.rect.size, .color = colors.apollo_dark_4, .radius = 4 });
-            self.haathi.drawRect(.{ .position = button.button.rect.position, .size = button.button.rect.size.scaleVec2(.{ .x = progress, .y = 1 }), .color = color, .radius = 4 });
-            const text_center = button.button.rect.position.add(button.button.rect.size.scaleVec2(.{ .x = 0.5, .y = 1 }).add(.{ .y = -18 }));
-            self.haathi.drawText(.{ .text = button.button.text, .position = text_center, .color = colors.apollo_light_4 });
-            const cost_text = std.fmt.allocPrintZ(self.arena, "[{d}]", .{button.cost}) catch unreachable;
-            self.haathi.drawText(.{ .text = cost_text, .position = text_center.add(.{ .y = -20 }), .color = colors.apollo_blue_1, .style = FONTS[1] });
+            const border = 8;
+            const complete = self.points_display > button.cost;
+            const border_color = if (complete) colors.apollo_blue_2 else colors.apollo_dark_5;
+            const offset = if (complete and button.button.hovered) Vec2{ .x = -10, .y = 10 } else Vec2{};
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position,
+                .size = button.button.rect.size,
+                .color = colors.apollo_brown_4,
+                .radius = 5,
+            });
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset),
+                .size = button.button.rect.size,
+                .color = border_color,
+                .radius = 5,
+            });
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset).add(.{ .x = border, .y = border }),
+                .size = button.button.rect.size.add(.{ .x = -border * 2, .y = -border * 2 }),
+                .color = colors.apollo_dark_4,
+                .radius = 5,
+            });
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset).add(.{ .x = border, .y = border }),
+                .size = button.button.rect.size.add(.{ .x = -border * 2, .y = -border * 2 }).scaleVec2(.{ .x = progress, .y = 1 }),
+                .color = colors.apollo_blue_3,
+                .radius = 5,
+            });
+            const strip_color = if (complete) colors.apollo_blue_4 else colors.apollo_dark_6;
+            const text_color = if (complete) colors.apollo_light_4 else colors.apollo_light_2;
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset).add(.{ .y = border }),
+                .size = .{ .x = border, .y = border },
+                .color = strip_color,
+            });
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset).add(.{ .x = border, .y = border }),
+                .size = .{ .x = (button.button.rect.size.x - (2 * border)) * progress, .y = border },
+                .color = strip_color,
+            });
+            if (complete) self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset).add(.{ .x = button.button.rect.size.x - border, .y = border }),
+                .size = .{ .x = border, .y = border },
+                .color = strip_color,
+            });
+            const text_center = button.button.rect.position.add(button.button.rect.size.scaleVec2(.{ .x = 0.5, .y = 1 }).add(.{ .y = -33 })).add(offset);
+            self.haathi.drawText(.{ .text = button.button.text, .position = text_center, .color = text_color });
+            if (button.cost > 0) {
+                const cost_text = if (button.cost < 1000000000) std.fmt.allocPrintZ(self.arena, "{d}", .{button.cost}) catch unreachable else "MAX";
+                self.haathi.drawText(.{ .text = cost_text, .position = text_center.add(.{ .x = 0, .y = -19 }), .color = text_color, .style = FONTS[1] });
+            }
         }
         for (self.tech_buttons.items) |button| {
-            const progress: f32 = @min(1.0, @as(f32, @floatFromInt(self.score_display)) / @as(f32, @floatFromInt(button.cost)));
-            const color = if (button.button.hovered and progress == 1.0) colors.apollo_blue_4.lerp(colors.apollo_blue_6, 0.4) else colors.apollo_blue_4;
-            self.haathi.drawRect(.{ .position = button.button.rect.position, .size = button.button.rect.size, .color = colors.apollo_dark_4, .radius = 4 });
-            self.haathi.drawRect(.{ .position = button.button.rect.position, .size = button.button.rect.size.scaleVec2(.{ .x = progress, .y = 1 }), .color = color, .radius = 4 });
-            const text_center = button.button.rect.position.add(button.button.rect.size.scaleVec2(.{ .x = 0.5, .y = 1 }).add(.{ .y = -18 }));
-            self.haathi.drawText(.{ .text = button.button.text, .position = text_center, .color = colors.apollo_light_4 });
-            const cost_text = std.fmt.allocPrintZ(self.arena, "[{d}]", .{button.cost}) catch unreachable;
-            self.haathi.drawText(.{ .text = cost_text, .position = text_center.add(.{ .y = -20 }), .color = colors.apollo_blue_1, .style = FONTS[1] });
+            const progress: f32 = @min(1.0, @as(f32, @floatFromInt(self.points_display)) / @as(f32, @floatFromInt(button.cost)));
+            const border = 8;
+            const complete = self.points_display > button.cost;
+            const border_color = if (complete) colors.apollo_blue_2 else colors.apollo_dark_5;
+            const offset = if (complete and button.button.hovered) Vec2{ .x = -10, .y = 10 } else Vec2{};
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position,
+                .size = button.button.rect.size,
+                .color = colors.apollo_brown_4,
+                .radius = 5,
+            });
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset),
+                .size = button.button.rect.size,
+                .color = border_color,
+                .radius = 5,
+            });
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset).add(.{ .x = border, .y = border }),
+                .size = button.button.rect.size.add(.{ .x = -border * 2, .y = -border * 2 }),
+                .color = colors.apollo_dark_4,
+                .radius = 5,
+            });
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset).add(.{ .x = border, .y = border }),
+                .size = button.button.rect.size.add(.{ .x = -border * 2, .y = -border * 2 }).scaleVec2(.{ .x = progress, .y = 1 }),
+                .color = colors.apollo_blue_3,
+                .radius = 5,
+            });
+            const strip_color = if (complete) colors.apollo_blue_4 else colors.apollo_dark_6;
+            const text_color = if (complete) colors.apollo_light_4 else colors.apollo_light_2;
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset).add(.{ .y = border }),
+                .size = .{ .x = border, .y = border },
+                .color = strip_color,
+            });
+            self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset).add(.{ .x = border, .y = border }),
+                .size = .{ .x = (button.button.rect.size.x - (2 * border)) * progress, .y = border },
+                .color = strip_color,
+            });
+            if (complete) self.haathi.drawRect(.{
+                .position = button.button.rect.position.add(offset).add(.{ .x = button.button.rect.size.x - border, .y = border }),
+                .size = .{ .x = border, .y = border },
+                .color = strip_color,
+            });
+            const text_center = button.button.rect.position.add(button.button.rect.size.scaleVec2(.{ .x = 0.5, .y = 1 }).add(.{ .y = -33 })).add(offset);
+            self.haathi.drawText(.{ .text = button.button.text, .position = text_center, .color = text_color });
+            if (button.cost > 0) {
+                const cost_text = if (button.cost < 1000000000) std.fmt.allocPrintZ(self.arena, "{d}", .{button.cost}) catch unreachable else "MAX";
+                self.haathi.drawText(.{ .text = cost_text, .position = text_center.add(.{ .x = 0, .y = -19 }), .color = text_color, .style = FONTS[1] });
+            }
         }
         for (self.miners.items, 0..) |miner, miner_index| {
             const position = self.getMinerPosition(miner_index);
             self.haathi.drawRect(.{
-                .position = position,
-                .size = .{ .x = 12, .y = 40 },
-                .color = colors.apollo_brown_2,
+                .position = position.add(.{ .x = -30, .y = -30 }),
+                .size = .{ .x = 30, .y = 12 },
+                .color = colors.apollo_red_1,
                 .radius = 2,
             });
             const progress: f32 = @as(f32, @floatFromInt(miner.timer)) / @as(f32, @floatFromInt(@max(miner.timer, self.miner_timer)));
             self.haathi.drawRect(.{
-                .position = position,
-                .size = .{ .x = 12, .y = 40 * progress },
-                .color = colors.apollo_brown_1,
+                .position = position.add(.{ .x = -30, .y = -30 }),
+                .size = .{ .x = 30 * (1.0 - progress), .y = 12 },
+                .color = colors.apollo_red_4,
                 .radius = 2,
+            });
+            self.haathi.drawSprite(.{
+                .sprite = .{
+                    .path = "img/digger.png",
+                    .anchor = .{},
+                    .size = .{ .x = 40, .y = 70 },
+                },
+                .position = position.add(.{ .x = -30, .y = -15 }),
             });
         }
         for (self.animations.items) |anim| {
@@ -1140,44 +1343,52 @@ pub const Game = struct {
                     const start = self.getMinerPosition(data.mine_index);
                     const end = self.getMineStoragePosition(data.storage_index);
                     const pos = start.ease(end, progress);
-                    self.haathi.drawRect(.{
-                        .position = pos,
-                        .size = .{ .x = 8, .y = 8 },
-                        .color = anim.res.color(),
-                        .radius = 8,
+                    self.haathi.drawSprite(.{
+                        .sprite = .{
+                            .path = "img/material.png",
+                            .anchor = .{},
+                            .size = .{ .x = 10, .y = 10 },
+                        },
+                        .position = pos.add(.{ .x = -1, .y = -1 }),
                     });
                 },
                 .carrier_pickup => |data| {
                     const start = self.getMineStoragePosition(data.storage_index);
                     const end = self.getCarrierWaitingPosition(data.carrier_index);
                     const pos = start.ease(end, progress);
-                    self.haathi.drawRect(.{
-                        .position = pos,
-                        .size = .{ .x = 8, .y = 8 },
-                        .color = anim.res.color(),
-                        .radius = 8,
+                    self.haathi.drawSprite(.{
+                        .sprite = .{
+                            .path = "img/material.png",
+                            .anchor = .{},
+                            .size = .{ .x = 10, .y = 10 },
+                        },
+                        .position = pos.add(.{ .x = -1, .y = -1 }),
                     });
                 },
                 .carrier_dropoff => |data| {
                     const start = self.getCarrierDropoffPosition(data.carrier_index);
                     const end = self.getBaseStoragePosition(data.storage_index);
                     const pos = start.ease(end, progress);
-                    self.haathi.drawRect(.{
-                        .position = pos,
-                        .size = .{ .x = 8, .y = 8 },
-                        .color = anim.res.color(),
-                        .radius = 8,
+                    self.haathi.drawSprite(.{
+                        .sprite = .{
+                            .path = "img/material.png",
+                            .anchor = .{},
+                            .size = .{ .x = 10, .y = 10 },
+                        },
+                        .position = pos.add(.{ .x = -1, .y = -1 }),
                     });
                 },
                 .builder => |data| {
                     const start = self.getBaseStoragePosition(data.storage_index);
                     const end = self.getBuilderPosition(data.builder_index);
                     const pos = start.ease(end, progress);
-                    self.haathi.drawRect(.{
-                        .position = pos,
-                        .size = .{ .x = 8, .y = 8 },
-                        .color = anim.res.color(),
-                        .radius = 8,
+                    self.haathi.drawSprite(.{
+                        .sprite = .{
+                            .path = "img/material.png",
+                            .anchor = .{},
+                            .size = .{ .x = 10, .y = 10 },
+                        },
+                        .position = pos.add(.{ .x = -1, .y = -1 }),
                     });
                 },
             }
@@ -1185,22 +1396,26 @@ pub const Game = struct {
         for (self.mine_storage.storage[0 .. self.mine_storage.num_rows * STORAGE_PER_ROW], 0..) |str, storage_index| {
             const pos = self.getMineStoragePosition(storage_index);
             if (str == .none or str == .reserved) continue;
-            self.haathi.drawRect(.{
-                .position = pos,
-                .size = .{ .x = 8, .y = 8 },
-                .color = str.color(),
-                .radius = 8,
+            self.haathi.drawSprite(.{
+                .sprite = .{
+                    .path = "img/material.png",
+                    .anchor = .{},
+                    .size = .{ .x = 10, .y = 10 },
+                },
+                .position = pos.add(.{ .x = -1, .y = -1 }),
             });
         }
 
         for (self.base_storage.storage[0 .. self.base_storage.num_rows * STORAGE_PER_ROW], 0..) |str, storage_index| {
             const pos = self.getBaseStoragePosition(storage_index);
             if (str == .none or str == .reserved) continue;
-            self.haathi.drawRect(.{
-                .position = pos,
-                .size = .{ .x = 8, .y = 8 },
-                .color = str.color(),
-                .radius = 8,
+            self.haathi.drawSprite(.{
+                .sprite = .{
+                    .path = "img/material.png",
+                    .anchor = .{},
+                    .size = .{ .x = 10, .y = 10 },
+                },
+                .position = pos.add(.{ .x = -1, .y = -1 }),
             });
         }
         for (self.carriers.items, 0..) |*carrier, carrier_index| {
@@ -1213,40 +1428,49 @@ pub const Game = struct {
                 .delivering => end,
                 .returning => end.ease(start, progress),
             };
-            self.haathi.drawRect(.{
-                .position = pos,
-                .size = .{ .x = 16, .y = 30 },
-                .color = colors.apollo_green_1,
-                .radius = 2,
-            });
-            self.haathi.drawText(.{
-                .position = pos.add(.{ .x = 10 }),
-                .text = @tagName(carrier.state),
-                .color = colors.apollo_green_1,
+            self.haathi.drawSprite(.{
+                .sprite = .{
+                    .path = "img/carrier.png",
+                    .anchor = .{},
+                    .size = .{ .x = 30, .y = 40 },
+                },
+                .position = pos.add(.{ .x = -10, .y = -5 }),
             });
             for (carrier.res, 0..) |res, i| {
-                self.haathi.drawRect(.{
-                    .position = pos.add(.{ .y = 30 }).add(.{ .y = 10 * @as(f32, @floatFromInt(i)) }),
-                    .size = .{ .x = 8, .y = 8 },
-                    .color = res.color(),
-                    .radius = 8,
+                if (res == .none or res == .reserved) continue;
+                const position = pos.add(.{ .y = 30 }).add(.{ .y = 10 * @as(f32, @floatFromInt(i)) });
+                self.haathi.drawSprite(.{
+                    .sprite = .{
+                        .path = "img/material.png",
+                        .anchor = .{},
+                        .size = .{ .x = 10, .y = 10 },
+                    },
+                    .position = position.add(.{ .x = -1, .y = 5 }),
                 });
             }
         }
         for (self.builders.items, 0..) |builder, builder_index| {
             const position = self.getBuilderPosition(builder_index);
-            self.haathi.drawRect(.{
-                .position = position,
-                .size = .{ .x = 12, .y = 40 },
-                .color = colors.apollo_green_2,
-                .radius = 2,
-            });
             const progress: f32 = @as(f32, @floatFromInt(builder.timer)) / @as(f32, @floatFromInt(@max(builder.timer, self.builder_timer)));
             self.haathi.drawRect(.{
-                .position = position,
-                .size = .{ .x = 12, .y = 40 * progress },
-                .color = colors.apollo_green_1,
+                .position = position.add(.{ .x = -30, .y = -30 }),
+                .size = .{ .x = 30, .y = 12 },
+                .color = colors.apollo_dark_2,
                 .radius = 2,
+            });
+            self.haathi.drawRect(.{
+                .position = position.add(.{ .x = -30, .y = -30 }),
+                .size = .{ .x = 30 * (progress), .y = 12 },
+                .color = colors.apollo_green_3,
+                .radius = 2,
+            });
+            self.haathi.drawSprite(.{
+                .sprite = .{
+                    .path = "img/builder.png",
+                    .anchor = .{},
+                    .size = .{ .x = 40, .y = 70 },
+                },
+                .position = position.add(.{ .x = -30, .y = -15 }),
             });
         }
         if (self.show_message) {
