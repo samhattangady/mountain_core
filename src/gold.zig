@@ -24,9 +24,24 @@ const build_options = @import("build_options");
 const BUILDER_MODE = build_options.builder_mode;
 const WORLD_SIZE = SCREEN_SIZE;
 const WORLD_OFFSET = Vec2{};
+const BORDER = 10;
+
+const POP_SOUNDS = [_][]const u8{
+    "audio/pop1.mp3",
+    "audio/pop2.mp3",
+    "audio/pop3.mp3",
+    "audio/pop4.mp3",
+    "audio/pop5.mp3",
+};
+const CLICK_SOUNDS = [_][]const u8{
+    "audio/click_down_1.mp3",
+    "audio/click_down_2.mp3",
+    "audio/click_down_3.mp3",
+};
 
 const ALL_SPRITES = [_][]const u8{
     "img/bg.png",
+    "img/sets.png",
     "img/bdg1.png",
     "img/bdg2.png",
     "img/bdg3.png",
@@ -102,7 +117,7 @@ const TECH_UPGRADES = [_]TechUpgrade{
         .score = 2000,
         .unlock = .carrier_strength,
         .text = "Consult the Blacksmith",
-        .subtext = "The Blacksmith can allow us to carry more material at a time.",
+        .subtext = "The Blacksmith can allow carriers to carry more material at a time.",
         .msg_index = 5,
     },
     .{
@@ -144,7 +159,7 @@ const TECH_UPGRADES = [_]TechUpgrade{
 
 const MESSAGES = [12][]const []const u8{
     &.{
-        "Click to Start",
+        "We are driven by a compulsion to build",
         "We are driven by a compulsion to build",
         "And so we build",
         "Recruit Diggers to dig for building material",
@@ -162,32 +177,32 @@ const MESSAGES = [12][]const []const u8{
     },
     &.{
         "The Masons feel compelled by our cause",
-        "They grant us the technology to speed up our carriers",
+        "They grant us the technology to speed up our building",
         "And so we build.",
     },
     &.{
         "The Blacksmith feel compelled by our cause",
-        "They grant us the technology to speed up our carriers",
+        "They grant us the technology to carry more",
         "And so we build.",
     },
     &.{
         "The Alchemists feel compelled by our cause",
-        "They grant us the technology to speed up our carriers",
+        "They allow us to make our material more valuable",
         "And so we build.",
     },
     &.{
         "The Dwarves feel compelled by our cause",
-        "They grant us the technology to speed up our carriers",
+        "They grant us the technology to dig faster",
         "And so we build.",
     },
     &.{
         "The Fairies feel compelled by our cause",
-        "They grant us the technology to speed up our carriers",
+        "They grant us the technology to speed up material transfer",
         "And so we build.",
     },
     &.{
         "The Elves feel compelled by our cause",
-        "They grant us the technology to speed up our carriers",
+        "They grant us the technology to make building more valuable",
         "And so we build.",
     },
     &.{
@@ -394,6 +409,7 @@ pub const Game = struct {
     world: World,
     ff_mode: bool = false,
     anim_steps: u16 = 37,
+    load_page: bool = true,
 
     miners: std.ArrayList(Miner),
     carriers: std.ArrayList(Carrier),
@@ -424,6 +440,7 @@ pub const Game = struct {
     message_subindex: u8 = 0,
     palace_completion: u8 = 0,
     building_complete: bool = false,
+    pops_queued: u8 = 0,
 
     xosh: std.Random.Xoshiro256,
     rng: std.Random = undefined,
@@ -446,9 +463,14 @@ pub const Game = struct {
 
     pub fn init(haathi: *Haathi) Game {
         // // TODO (19 Sep 2024 sam): load sounds and images
-        haathi.loadSound("audio/damage.wav", false);
-        haathi.loadSound("audio/danger.wav", false);
-        haathi.loadSound("audio/capture.wav", false);
+        haathi.loadSound("audio/pop1.mp3", false);
+        haathi.loadSound("audio/pop2.mp3", false);
+        haathi.loadSound("audio/pop3.mp3", false);
+        haathi.loadSound("audio/pop4.mp3", false);
+        haathi.loadSound("audio/pop5.mp3", false);
+        haathi.loadSound("audio/click_down_1.mp3", false);
+        haathi.loadSound("audio/click_down_2.mp3", false);
+        haathi.loadSound("audio/click_down_3.mp3", false);
         for (ALL_SPRITES) |path| haathi.loadSpriteMap(path);
         const allocator = haathi.allocator;
         var arena_handle = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -486,9 +508,11 @@ pub const Game = struct {
     }
 
     pub fn setup(self: *Game) void {
+        self.rng = self.xosh.random();
         self.unlocked[@intFromEnum(ButtonAction.miner_recruit)] = true;
-        if (true) {
+        if (false) {
             for (&self.unlocked) |*unl| unl.* = true;
+            self.checkTechUpgrades();
         }
         self.resetButtons();
     }
@@ -503,7 +527,7 @@ pub const Game = struct {
                         .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.miner_recruit),
-                    .text = "Recruit Miner",
+                    .text = "Recruit Digger",
                 },
                 .cost = 0,
             });
@@ -515,7 +539,7 @@ pub const Game = struct {
                         .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.miner_speedup),
-                    .text = "Miner Speedup",
+                    .text = "Digger Speedup",
                 },
                 .cost = 0,
             });
@@ -595,7 +619,7 @@ pub const Game = struct {
                         .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.resource_upgrade),
-                    .text = "Upgrade Resource",
+                    .text = "Resource Alchemy",
                 },
                 .cost = 0,
             });
@@ -607,7 +631,7 @@ pub const Game = struct {
                         .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.anim_speedup),
-                    .text = "Transfer Speedup",
+                    .text = "Fairy Magic",
                 },
                 .cost = 0,
             });
@@ -619,7 +643,7 @@ pub const Game = struct {
                         .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.rep_mult_increase),
-                    .text = "Builder Rep Multiplier",
+                    .text = "Elven Bonus",
                 },
                 .cost = 0,
             });
@@ -631,7 +655,7 @@ pub const Game = struct {
                         .size = .{ .x = 260, .y = 60 },
                     },
                     .value = @intFromEnum(ButtonAction.complete_game),
-                    .text = "Complete Game",
+                    .text = "Complete Construction",
                 },
                 .cost = 0,
             });
@@ -838,7 +862,7 @@ pub const Game = struct {
 
     fn checkTechUpgrades(self: *Game) void {
         self.tech_buttons.clearRetainingCapacity();
-        var pos = Vec2{ .x = 50, .y = 540 };
+        var pos = Vec2{ .x = 50, .y = 560 };
         for (TECH_UPGRADES) |tu| {
             if (self.unlocked[@intFromEnum(tu.unlock)]) continue;
             if (self.score >= (tu.score - @divFloor(tu.score, 5))) {
@@ -846,7 +870,7 @@ pub const Game = struct {
                     .button = .{
                         .rect = .{
                             .position = pos,
-                            .size = .{ .x = 400, .y = 40 },
+                            .size = .{ .x = 540, .y = 60 },
                         },
                         .text = tu.text,
                         .text2 = tu.subtext,
@@ -881,6 +905,42 @@ pub const Game = struct {
         }
     }
 
+    fn popRate(self: *Game) usize {
+        if (self.score < 100) return 60;
+        if (self.score < 500) return 40;
+        if (self.score < 660) return 35;
+        if (self.score < 1000) return 30;
+        if (self.score < 1200) return 29;
+        if (self.score < 3000) return 28;
+        if (self.score < 4000) return 26;
+        if (self.score < 5000) return 25;
+        if (self.score < 10000) return 20;
+        if (self.score < 25000) return 16;
+        if (self.score < 50000) return 13;
+        if (self.score < 100000) return 10;
+        if (self.score < 200000) return 7;
+        if (self.score < 300000) return 5;
+        if (self.score < 1000000) return 4;
+        return 3;
+    }
+
+    fn playPopSound(self: *Game) void {
+        if (self.pops_queued > 0) {
+            const rate = self.popRate();
+            if (@mod(self.steps, rate) == 0) {
+                self.pops_queued -= 1;
+                const index = self.rng.uintLessThan(u8, POP_SOUNDS.len);
+                self.haathi.setSoundVolume(POP_SOUNDS[index], 0.3);
+                self.haathi.playSound(POP_SOUNDS[index], false);
+            }
+        }
+    }
+
+    fn playClickSound(self: *Game) void {
+        const index = self.rng.uintLessThan(u8, CLICK_SOUNDS.len);
+        self.haathi.playSound(CLICK_SOUNDS[index], false);
+    }
+
     // updateGame
     pub fn update(self: *Game, ticks: u64) void {
         // clear the arena and reset.
@@ -888,7 +948,15 @@ pub const Game = struct {
         _ = self.arena_handle.reset(.retain_capacity);
         self.arena = self.arena_handle.allocator();
         self.ticks = @intCast(ticks);
+        if (self.load_page) {
+            if (self.haathi.inputs.mouse.l_button.is_clicked) {
+                self.load_page = false;
+            } else {
+                return;
+            }
+        }
         self.updateScore();
+        if (self.score_display < 10000000) self.playPopSound();
         if (self.haathi.inputs.getKey(.control).is_down and self.haathi.inputs.getKey(.s).is_clicked) {
             self.saveGame();
         }
@@ -903,26 +971,30 @@ pub const Game = struct {
                 self.message_subindex = 0;
             }
         }
-        for (self.buttons.items) |*button| button.button.update(self.haathi.inputs.mouse);
-        for (self.buttons.items) |button| {
-            if (button.button.clicked) {
-                if (self.points_display >= button.cost) {
-                    self.points_display -= button.cost;
-                    self.points -= button.cost;
-                    self.doButtonAction(@enumFromInt(button.button.value));
+        if (!self.show_message) {
+            for (self.buttons.items) |*button| button.button.update(self.haathi.inputs.mouse);
+            for (self.buttons.items) |button| {
+                if (button.button.clicked) {
+                    if (self.points_display >= button.cost) {
+                        self.points_display -= button.cost;
+                        self.points -= button.cost;
+                        self.doButtonAction(@enumFromInt(button.button.value));
+                        self.playClickSound();
+                    }
                 }
             }
-        }
-        for (self.tech_buttons.items) |*button| button.button.update(self.haathi.inputs.mouse);
-        for (self.tech_buttons.items) |button| {
-            if (button.button.clicked) {
-                if (self.score >= button.cost) {
-                    self.unlocked[button.button.value] = true;
-                    self.message_index = @intCast(button.button.index);
-                    self.message_subindex = 0;
-                    self.show_message = true;
-                    self.checkTechUpgrades();
-                    self.resetButtons();
+            for (self.tech_buttons.items) |*button| button.button.update(self.haathi.inputs.mouse);
+            for (self.tech_buttons.items) |button| {
+                if (button.button.clicked) {
+                    if (self.score >= button.cost) {
+                        self.unlocked[button.button.value] = true;
+                        self.message_index = @intCast(button.button.index);
+                        self.message_subindex = 0;
+                        self.show_message = true;
+                        self.checkTechUpgrades();
+                        self.resetButtons();
+                        self.playClickSound();
+                    }
                 }
             }
         }
@@ -1042,6 +1114,7 @@ pub const Game = struct {
                         builder.reserved = true;
                         self.score += res.score() * self.rep_mult;
                         self.points += res.score() * self.rep_mult;
+                        if (self.pops_queued < 15) self.pops_queued += 1;
                         // create animation
                         self.addAnimation(.{
                             .res = res,
@@ -1086,6 +1159,29 @@ pub const Game = struct {
         self.haathi.drawSprite(.{
             .sprite = .{
                 .path = "img/bg.png",
+                .anchor = .{},
+                .size = SCREEN_SIZE,
+            },
+            .position = .{},
+        });
+        if (self.load_page) {
+            self.haathi.drawText(.{
+                .text = "and so we build",
+                .position = .{ .x = SCREEN_SIZE.x * 0.5, .y = SCREEN_SIZE.y * 0.86 },
+                .color = colors.apollo_light_4,
+                .style = FONTS[2],
+            });
+            self.haathi.drawText(.{
+                .text = "click to start",
+                .position = .{ .x = SCREEN_SIZE.x * 0.5, .y = SCREEN_SIZE.y * 0.82 },
+                .color = colors.apollo_light_4,
+                .style = "20px InterMedium",
+            });
+            return;
+        }
+        self.haathi.drawSprite(.{
+            .sprite = .{
+                .path = "img/sets.png",
                 .anchor = .{},
                 .size = SCREEN_SIZE,
             },
@@ -1150,7 +1246,6 @@ pub const Game = struct {
             });
         }
         {
-            const BORDER = 10;
             // shadow of pane
             self.haathi.drawRect(.{
                 .position = .{ .x = 25, .y = 15 },
@@ -1257,10 +1352,10 @@ pub const Game = struct {
             }
         }
         for (self.tech_buttons.items) |button| {
-            const progress: f32 = @min(1.0, @as(f32, @floatFromInt(self.points_display)) / @as(f32, @floatFromInt(button.cost)));
+            const progress: f32 = @min(1.0, @as(f32, @floatFromInt(self.score_display)) / @as(f32, @floatFromInt(button.cost)));
             const border = 8;
-            const complete = self.points_display > button.cost;
-            const border_color = if (complete) colors.apollo_blue_2 else colors.apollo_dark_5;
+            const complete = self.score_display > button.cost;
+            const border_color = if (complete) colors.apollo_red_2 else colors.apollo_dark_5;
             const offset = if (complete and button.button.hovered) Vec2{ .x = -10, .y = 10 } else Vec2{};
             self.haathi.drawRect(.{
                 .position = button.button.rect.position,
@@ -1283,10 +1378,10 @@ pub const Game = struct {
             self.haathi.drawRect(.{
                 .position = button.button.rect.position.add(offset).add(.{ .x = border, .y = border }),
                 .size = button.button.rect.size.add(.{ .x = -border * 2, .y = -border * 2 }).scaleVec2(.{ .x = progress, .y = 1 }),
-                .color = colors.apollo_blue_3,
+                .color = colors.apollo_red_3,
                 .radius = 5,
             });
-            const strip_color = if (complete) colors.apollo_blue_4 else colors.apollo_dark_6;
+            const strip_color = if (complete) colors.apollo_red_4 else colors.apollo_dark_6;
             const text_color = if (complete) colors.apollo_light_4 else colors.apollo_light_2;
             self.haathi.drawRect(.{
                 .position = button.button.rect.position.add(offset).add(.{ .y = border }),
@@ -1418,6 +1513,30 @@ pub const Game = struct {
                 .position = pos.add(.{ .x = -1, .y = -1 }),
             });
         }
+        for (self.builders.items, 0..) |builder, builder_index| {
+            const position = self.getBuilderPosition(builder_index);
+            const progress: f32 = @as(f32, @floatFromInt(builder.timer)) / @as(f32, @floatFromInt(@max(builder.timer, self.builder_timer)));
+            self.haathi.drawRect(.{
+                .position = position.add(.{ .x = -30, .y = -30 }),
+                .size = .{ .x = 30, .y = 12 },
+                .color = colors.apollo_dark_2,
+                .radius = 2,
+            });
+            self.haathi.drawRect(.{
+                .position = position.add(.{ .x = -30, .y = -30 }),
+                .size = .{ .x = 30 * (progress), .y = 12 },
+                .color = colors.apollo_green_3,
+                .radius = 2,
+            });
+            self.haathi.drawSprite(.{
+                .sprite = .{
+                    .path = "img/builder.png",
+                    .anchor = .{},
+                    .size = .{ .x = 40, .y = 70 },
+                },
+                .position = position.add(.{ .x = -30, .y = -15 }),
+            });
+        }
         for (self.carriers.items, 0..) |*carrier, carrier_index| {
             const progress: f32 = 1.0 - (@as(f32, @floatFromInt(carrier.timer)) / @as(f32, @floatFromInt(@max(carrier.timer, self.carrier_timer))));
             const start = self.getCarrierWaitingPosition(carrier_index);
@@ -1449,41 +1568,35 @@ pub const Game = struct {
                 });
             }
         }
-        for (self.builders.items, 0..) |builder, builder_index| {
-            const position = self.getBuilderPosition(builder_index);
-            const progress: f32 = @as(f32, @floatFromInt(builder.timer)) / @as(f32, @floatFromInt(@max(builder.timer, self.builder_timer)));
-            self.haathi.drawRect(.{
-                .position = position.add(.{ .x = -30, .y = -30 }),
-                .size = .{ .x = 30, .y = 12 },
-                .color = colors.apollo_dark_2,
-                .radius = 2,
-            });
-            self.haathi.drawRect(.{
-                .position = position.add(.{ .x = -30, .y = -30 }),
-                .size = .{ .x = 30 * (progress), .y = 12 },
-                .color = colors.apollo_green_3,
-                .radius = 2,
-            });
-            self.haathi.drawSprite(.{
-                .sprite = .{
-                    .path = "img/builder.png",
-                    .anchor = .{},
-                    .size = .{ .x = 40, .y = 70 },
-                },
-                .position = position.add(.{ .x = -30, .y = -15 }),
-            });
-        }
         if (self.show_message) {
-            self.haathi.drawRect(.{
-                .position = SCREEN_SIZE.scale(0.3),
-                .size = SCREEN_SIZE.scale(0.4),
-                .color = colors.apollo_dark_1,
-            });
-            self.haathi.drawText(.{
-                .position = SCREEN_SIZE.scale(0.5),
-                .text = MESSAGES[self.message_index][self.message_subindex],
-                .color = colors.apollo_light_3,
-            });
+            if (self.message_index == MESSAGES.len - 1) {
+                self.haathi.drawRect(.{
+                    .position = .{},
+                    .size = SCREEN_SIZE,
+                    .color = colors.apollo_dark_1,
+                });
+                self.haathi.drawText(.{
+                    .position = SCREEN_SIZE.scaleVec2(.{ .x = 0.5, .y = 0.5 }),
+                    .text = MESSAGES[self.message_index][self.message_subindex],
+                    .color = colors.apollo_light_4,
+                    .style = "20px InterBold",
+                    .width = SCREEN_SIZE.x * 0.6,
+                });
+            } else {
+                self.haathi.drawRect(.{
+                    .position = .{ .x = 15 + BORDER, .y = 25 + BORDER },
+                    .size = .{ .y = SCREEN_SIZE.y - 40 - (2 * BORDER), .x = (SCREEN_SIZE.x * 0.5) - 30 - (2 * BORDER) },
+                    .color = colors.apollo_brown_1,
+                    .radius = 10,
+                });
+                self.haathi.drawText(.{
+                    .position = SCREEN_SIZE.scaleVec2(.{ .x = 0.25, .y = 0.5 }),
+                    .text = MESSAGES[self.message_index][self.message_subindex],
+                    .color = colors.apollo_light_4,
+                    .style = "20px InterBold",
+                    .width = SCREEN_SIZE.x * 0.45,
+                });
+            }
         }
     }
 };
